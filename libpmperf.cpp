@@ -1,8 +1,67 @@
+#include <string>
+#include <bitset>
+#include <fstream>
+#include <iostream>
+
 #include "pmperf.h"
 
 const uint32 max_sockets = 256;
 const uint32 max_imc_channels = 6;
 const uint32 max_imc_controllers = 2;
+
+
+
+void CoreResult::print(std::ostream & s)
+{
+    s << "UsedCore\t" << used << std::endl;
+    
+    //core
+    s << "InvariantTSC\t" << tsc << std::endl; 
+    s << "Cycles\t" << cycles << std::endl; 
+    s << "RefCycles\t" << ref_cycles << std::endl;   
+    s << "InstructionsRetired\t" << inst_retired << std::endl;
+    s << "IPC\t" << ipc << std::endl; 
+    s << "ExecUsage\t" << core_usage << std::endl;   
+    s << "ActiveAverageFrequency\t" << avg_freq << std::endl; 
+    s << "ActiveRelativeFrequency\t" << relative_freq << std::endl;
+    //cache
+    s << "L2CacheHitRatio\t" << l2hitratio << std::endl; 
+    s << "L2CacheHits\t" << l2hits << std::endl;   
+    s << "L2CacheMisses\t" << l2misses << std::endl;
+    s << "L3CacheHitRatio\t" << l3hitratio << std::endl; 
+    s << "L3CacheHits\t" << l3hits << std::endl;   
+    s << "L3CacheMisses\t" << l3misses << std::endl;
+}
+
+
+void SocketResult::print(std::ostream & s)
+{
+    //core
+    s << "InvariantTSC\t" << tsc << std::endl; 
+    s << "Cycles\t" << cycles << std::endl; 
+    s << "RefCycles\t" << ref_cycles << std::endl;   
+    s << "InstructionsRetired\t" << inst_retired << std::endl;
+    s << "IPC\t" << ipc << std::endl; 
+    s << "ExecUsage\t" << core_usage << std::endl;   
+    s << "ActiveAverageFrequency\t" << avg_freq << std::endl; 
+    s << "ActiveRelativeFrequency\t" << relative_freq << std::endl;
+    //cache
+    s << "L2CacheHitRatio\t" << l2hitratio << std::endl; 
+    s << "L2CacheHits\t" << l2hits << std::endl;   
+    s << "L2CacheMisses\t" << l2misses << std::endl;
+    s << "L3CacheHitRatio\t" << l3hitratio << std::endl; 
+    s << "L3CacheHits\t" << l3hits << std::endl;   
+    s << "L3CacheMisses\t" << l3misses << std::endl;
+    
+    //pmm
+    s << "RPQInsert\t" << rinsert << std::endl;
+    s << "RPQOccupancy\t" << roccupancy << std::endl;
+    s << "ReadLatency\t" << rlatency << std::endl;
+    s << "WPQInsert\t" << winsert << std::endl;
+    s << "WPQOccupancy\t" << woccupancy << std::endl;
+    s << "WriteLatency\t" << wlatency << std::endl;
+
+}
 
 
 PmState::PmState()
@@ -23,6 +82,106 @@ void PmState::CollectState(pcm::PCM * m)
     m->getAllCounterStates(system_counter, socket_counter, core_counter);
 }
 
+double PmState::getRpqIns(pcm::PCM *m, PmState *before, PmState* after, int socket){
+    double res = 0;
+    for (size_t channel = 0; channel < m->getMCChannelsPerSocket(); ++channel)
+    {
+        res += (double)pcm::getMCCounter((uint32)channel, RPQ_INS, 
+        before->uncore_counter[socket], after->uncore_counter[socket]);
+    }
+    return res;
+}
+
+double PmState::getRpqOcc(pcm::PCM *m, PmState *before, PmState* after, int socket){
+    double res = 0;
+    for (size_t channel = 0; channel < m->getMCChannelsPerSocket(); ++channel)
+    {
+        res += (double)pcm::getMCCounter((uint32)channel, RPQ_OCC, 
+        before->uncore_counter[socket], after->uncore_counter[socket]);
+    }
+    return res;
+}
+
+double PmState::getWpqIns(pcm::PCM *m, PmState *before, PmState* after, int socket){
+    double res = 0;
+    for (size_t channel = 0; channel < m->getMCChannelsPerSocket(); ++channel)
+    {
+        res += (double)pcm::getMCCounter((uint32)channel, WPQ_INS, 
+        before->uncore_counter[socket], after->uncore_counter[socket]);
+    }
+    return res;
+}
+
+double PmState::getWpqOcc(pcm::PCM *m, PmState *before, PmState* after, int socket){
+    double res = 0;
+    for (size_t channel = 0; channel < m->getMCChannelsPerSocket(); ++channel)
+    {
+        res += (double)pcm::getMCCounter((uint32)channel, WPQ_OCC, 
+        before->uncore_counter[socket], after->uncore_counter[socket]);
+    }
+    return res;
+}
+
+void PmState::getCoreResult(pcm::PCM * m, CoreResult * res, PmState * before, PmState * after, int core)
+{
+    //core
+    res->tsc = pcm::getInvariantTSC(before->core_counter[core], after->core_counter[core]);
+    res->cycles = pcm::getCycles(before->core_counter[core], after->core_counter[core]);
+    res->ref_cycles = pcm::getRefCycles(before->core_counter[core], after->core_counter[core]);
+    res->inst_retired = pcm::getInstructionsRetired(before->core_counter[core], after->core_counter[core]);
+
+    res->ipc = pcm::getIPC(before->core_counter[core], after->core_counter[core]);
+    res->core_usage = pcm::getExecUsage(before->core_counter[core], after->core_counter[core]);
+    res->avg_freq = pcm::getActiveAverageFrequency(before->core_counter[core], after->core_counter[core]);
+    res->relative_freq = pcm::getActiveRelativeFrequency(before->core_counter[core], after->core_counter[core]);
+
+    //L2, L3 cache
+    res->l2hitratio = pcm::getL2CacheHitRatio(before->core_counter[core], after->core_counter[core]);
+    res->l2hits = pcm::getL2CacheHits(before->core_counter[core], after->core_counter[core]);
+    res->l2misses = pcm::getL2CacheMisses(before->core_counter[core], after->core_counter[core]);
+    res->l3hitratio = pcm::getL3CacheHitRatio(before->core_counter[core], after->core_counter[core]);
+    res->l3hits = pcm::getL3CacheHits(before->core_counter[core], after->core_counter[core]);
+    res->l3misses = pcm::getL3CacheMisses(before->core_counter[core], after->core_counter[core]);
+}
+
+
+void PmState::getSocketResult(pcm::PCM * m, SocketResult * res, PmState * before, PmState * after, int socket)
+{
+    //core
+    res->tsc = pcm::getInvariantTSC(before->socket_counter[socket], after->socket_counter[socket]);
+    res->cycles = pcm::getCycles(before->socket_counter[socket], after->socket_counter[socket]);
+    res->ref_cycles = pcm::getRefCycles(before->socket_counter[socket], after->socket_counter[socket]);
+    res->inst_retired = pcm::getInstructionsRetired(before->socket_counter[socket], after->socket_counter[socket]);
+
+    res->ipc = pcm::getIPC(before->socket_counter[socket], after->socket_counter[socket]);
+    res->core_usage = pcm::getExecUsage(before->socket_counter[socket], after->socket_counter[socket]);
+    res->avg_freq = pcm::getActiveAverageFrequency(before->socket_counter[socket], after->socket_counter[socket]);
+    res->relative_freq = pcm::getActiveRelativeFrequency(before->socket_counter[socket], after->socket_counter[socket]);
+
+    //L2, L3 cache
+    res->l2hitratio = pcm::getL2CacheHitRatio(before->socket_counter[socket], after->socket_counter[socket]);
+    res->l2hits = pcm::getL2CacheHits(before->socket_counter[socket], after->socket_counter[socket]);
+    res->l2misses = pcm::getL2CacheMisses(before->socket_counter[socket], after->socket_counter[socket]);
+    res->l3hitratio = pcm::getL3CacheHitRatio(before->socket_counter[socket], after->socket_counter[socket]);
+    res->l3hits = pcm::getL3CacheHits(before->socket_counter[socket], after->socket_counter[socket]);
+    res->l3misses = pcm::getL3CacheMisses(before->socket_counter[socket], after->socket_counter[socket]);
+
+    //uncore
+    res->rinsert = getRpqIns(m, before, after, socket);
+    res->roccupancy = getRpqOcc(m, before, after, socket);
+    res->winsert = getWpqIns(m, before, after, socket);
+    res->woccupancy = getWpqOcc(m, before, after, socket);
+
+    if(res->rinsert==0.) 
+        res->rlatency = 0;
+    else 
+        res->rlatency = res->roccupancy / res->rinsert;
+
+    if(res->winsert==0.) 
+        res->wlatency = 0;
+    else 
+        res->wlatency = res->woccupancy / res->winsert;
+}
 
 
 
@@ -107,6 +266,7 @@ pcm::PCM::ErrorCode PmPerf::pmm_program()
     return status;
 }
 
+
 void PmPerf::before()
 {
     before_state->CollectState(m);
@@ -117,156 +277,27 @@ void PmPerf::after()
     after_state->CollectState(m);
 }
 
-double PmState::getRpqIns(pcm::PCM *m, PmState *before, PmState* after, int socket){
-    double res = 0;
-    for (size_t channel = 0; channel < m->getMCChannelsPerSocket(); ++channel)
-    {
-        res += (double)pcm::getMCCounter((uint32)channel, RPQ_INS, 
-        before->uncore_counter[socket], after->uncore_counter[socket]);
-    }
-    return res;
-}
-
-double PmState::getRpqOcc(pcm::PCM *m, PmState *before, PmState* after, int socket){
-    double res = 0;
-    for (size_t channel = 0; channel < m->getMCChannelsPerSocket(); ++channel)
-    {
-        res += (double)pcm::getMCCounter((uint32)channel, RPQ_OCC, 
-        before->uncore_counter[socket], after->uncore_counter[socket]);
-    }
-    return res;
-}
-
-double PmState::getWpqIns(pcm::PCM *m, PmState *before, PmState* after, int socket){
-    double res = 0;
-    for (size_t channel = 0; channel < m->getMCChannelsPerSocket(); ++channel)
-    {
-        res += (double)pcm::getMCCounter((uint32)channel, WPQ_INS, 
-        before->uncore_counter[socket], after->uncore_counter[socket]);
-    }
-    return res;
-}
-
-double PmState::getWpqOcc(pcm::PCM *m, PmState *before, PmState* after, int socket){
-    double res = 0;
-    for (size_t channel = 0; channel < m->getMCChannelsPerSocket(); ++channel)
-    {
-        res += (double)pcm::getMCCounter((uint32)channel, WPQ_OCC, 
-        before->uncore_counter[socket], after->uncore_counter[socket]);
-    }
-    return res;
-}
-
-void SocketResult::print(void)
+void PmPerf::clear()
 {
-    //core
-    std::cout << "InvariantTSC\t" << tsc << std::endl; 
-    std::cout << "Cycles\t" << cycles << std::endl; 
-    std::cout << "RefCycles\t" << ref_cycles << std::endl;   
-    std::cout << "InstructionsRetired\t" << inst_retired << std::endl;
-    std::cout << "IPC\t" << ipc << std::endl; 
-    std::cout << "ExecUsage\t" << core_usage << std::endl;   
-    std::cout << "ActiveAverageFrequency\t" << avg_freq << std::endl; 
-    std::cout << "ActiveRelativeFrequency\t" << relative_freq << std::endl;
-    //cache
-    std::cout << "L2CacheHitRatio\t" << l2hitratio << std::endl; 
-    std::cout << "L2CacheHits\t" << l2hits << std::endl;   
-    std::cout << "L2CacheMisses\t" << l2misses << std::endl;
-    std::cout << "L3CacheHitRatio\t" << l3hitratio << std::endl; 
-    std::cout << "L3CacheHits\t" << l3hits << std::endl;   
-    std::cout << "L3CacheMisses\t" << l3misses << std::endl;
-    
-    //pmm
-    std::cout << "RPQInsert\t" << rinsert << std::endl;
-    std::cout << "RPQOccupancy\t" << roccupancy << std::endl;
-    std::cout << "ReadLatency\t" << rlatency << std::endl;
-    std::cout << "WPQInsert\t" << winsert << std::endl;
-    std::cout << "WPQInsert\t" << woccupancy << std::endl;
-    std::cout << "WriteLatency\t" << wlatency << std::endl;
-
+    used_core_map.reset();
+    external.clear();
 }
 
-void CoreResult::print(void)
+void PmPerf::used_core(int id)
 {
-    //core
-    std::cout << "InvariantTSC\t" << tsc << std::endl; 
-    std::cout << "Cycles\t" << cycles << std::endl; 
-    std::cout << "RefCycles\t" << ref_cycles << std::endl;   
-    std::cout << "InstructionsRetired\t" << inst_retired << std::endl;
-    std::cout << "IPC\t" << ipc << std::endl; 
-    std::cout << "ExecUsage\t" << core_usage << std::endl;   
-    std::cout << "ActiveAverageFrequency\t" << avg_freq << std::endl; 
-    std::cout << "ActiveRelativeFrequency\t" << relative_freq << std::endl;
-    //cache
-    std::cout << "L2CacheHitRatio\t" << l2hitratio << std::endl; 
-    std::cout << "L2CacheHits\t" << l2hits << std::endl;   
-    std::cout << "L2CacheMisses\t" << l2misses << std::endl;
-    std::cout << "L3CacheHitRatio\t" << l3hitratio << std::endl; 
-    std::cout << "L3CacheHits\t" << l3hits << std::endl;   
-    std::cout << "L3CacheMisses\t" << l3misses << std::endl;
+    used_core_map.set(id);
 }
 
-void PmState::getSocketResult(pcm::PCM * m, SocketResult * res, PmState * before, PmState * after, int socket)
+void PmPerf::add_external(const char * k, double v)
 {
-    //core
-    res->tsc = pcm::getInvariantTSC(before->socket_counter[socket], after->socket_counter[socket]);
-    res->cycles = pcm::getCycles(before->socket_counter[socket], after->socket_counter[socket]);
-    res->ref_cycles = pcm::getRefCycles(before->socket_counter[socket], after->socket_counter[socket]);
-    res->inst_retired = pcm::getInstructionsRetired(before->socket_counter[socket], after->socket_counter[socket]);
-
-    res->ipc = pcm::getIPC(before->socket_counter[socket], after->socket_counter[socket]);
-    res->core_usage = pcm::getExecUsage(before->socket_counter[socket], after->socket_counter[socket]);
-    res->avg_freq = pcm::getActiveAverageFrequency(before->socket_counter[socket], after->socket_counter[socket]);
-    res->relative_freq = pcm::getActiveRelativeFrequency(before->socket_counter[socket], after->socket_counter[socket]);
-
-    //L2, L3 cache
-    res->l2hitratio = pcm::getL2CacheHitRatio(before->socket_counter[socket], after->socket_counter[socket]);
-    res->l2hits = pcm::getL2CacheHits(before->socket_counter[socket], after->socket_counter[socket]);
-    res->l2misses = pcm::getL2CacheMisses(before->socket_counter[socket], after->socket_counter[socket]);
-    res->l3hitratio = pcm::getL3CacheHitRatio(before->socket_counter[socket], after->socket_counter[socket]);
-    res->l3hits = pcm::getL3CacheHits(before->socket_counter[socket], after->socket_counter[socket]);
-    res->l3misses = pcm::getL3CacheMisses(before->socket_counter[socket], after->socket_counter[socket]);
-
-    //uncore
-    res->rinsert = getRpqIns(m, before, after, socket);
-    res->roccupancy = getRpqOcc(m, before, after, socket);
-    res->winsert = getWpqIns(m, before, after, socket);
-    res->woccupancy = getWpqOcc(m, before, after, socket);
-
-    if(res->rinsert==0.) 
-        res->rlatency = 0;
-    else 
-        res->rlatency = res->roccupancy / res->rinsert;
-
-    if(res->winsert==0.) 
-        res->wlatency = 0;
-    else 
-        res->wlatency = res->roccupancy / res->rinsert;
+    external[k] = v;
 }
-
-void PmState::getCoreResult(pcm::PCM * m, CoreResult * res, PmState * before, PmState * after, int core)
+void PmPerf::add_external(const char *k , uint64 v)
 {
-    //core
-    res->tsc = pcm::getInvariantTSC(before->core_counter[core], after->core_counter[core]);
-    res->cycles = pcm::getCycles(before->core_counter[core], after->core_counter[core]);
-    res->ref_cycles = pcm::getRefCycles(before->core_counter[core], after->core_counter[core]);
-    res->inst_retired = pcm::getInstructionsRetired(before->core_counter[core], after->core_counter[core]);
-
-    res->ipc = pcm::getIPC(before->core_counter[core], after->core_counter[core]);
-    res->core_usage = pcm::getExecUsage(before->core_counter[core], after->core_counter[core]);
-    res->avg_freq = pcm::getActiveAverageFrequency(before->core_counter[core], after->core_counter[core]);
-    res->relative_freq = pcm::getActiveRelativeFrequency(before->core_counter[core], after->core_counter[core]);
-
-    //L2, L3 cache
-    res->l2hitratio = pcm::getL2CacheHitRatio(before->core_counter[core], after->core_counter[core]);
-    res->l2hits = pcm::getL2CacheHits(before->core_counter[core], after->core_counter[core]);
-    res->l2misses = pcm::getL2CacheMisses(before->core_counter[core], after->core_counter[core]);
-    res->l3hitratio = pcm::getL3CacheHitRatio(before->core_counter[core], after->core_counter[core]);
-    res->l3hits = pcm::getL3CacheHits(before->core_counter[core], after->core_counter[core]);
-    res->l3misses = pcm::getL3CacheMisses(before->core_counter[core], after->core_counter[core]);
+    external[k] = (double) v;
 }
 
-void PmPerf::diff()
+void PmPerf::diff(std::ostream & os)
 {
     SocketResult * res_socket = new SocketResult[m->getNumSockets()];
     CoreResult * res_core = new CoreResult[m->getNumCores()];
@@ -280,15 +311,16 @@ void PmPerf::diff()
     for (uint32 j=0; j<m->getNumCores(); j++)
     {
         CoreResult * c = &res_core[j];
-
+        if (used_core_map.test(j))
+            c->used = true;
         PmState::getCoreResult(m, c, before_state, after_state, j);
     }
 
     for (uint32 i=0; i<m->getNumSockets(); i++)
     {
         SocketResult * s = &res_socket[i];
-        std::cout << ":: Socket " << i << std::endl;
-        s->print();
+        os << ":: Socket " << i << std::endl;
+        s->print(os);
 
         for (uint32 j=0; j<m->getNumCores(); j++)
         {
@@ -296,8 +328,8 @@ void PmPerf::diff()
             
             if( m->getSocketId(j) != (int32) i) continue;
 
-            std::cout << "::: Core " << j << std::endl;
-            c->print();
+            os << "::: Core " << j << std::endl;
+            c->print(os);
 
         }
     }
@@ -305,4 +337,21 @@ void PmPerf::diff()
     delete res_socket;
     
     return;
+}
+
+void PmPerf::export_diff(char * path) {
+
+    std::ofstream outFile(path);
+
+    for ( auto & kv : external)
+    {
+        outFile << kv.first << "\t" << kv.second << std::endl;
+    }
+     
+    diff(outFile);
+    
+    outFile.close();
+    
+    return;
+
 }

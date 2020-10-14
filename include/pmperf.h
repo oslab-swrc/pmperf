@@ -1,6 +1,7 @@
 #ifndef PMPERF_H
 #define PMPERF_H 1
 
+#include <bitset>
 #include "cpucounters.h"
 
 typedef unsigned long long uint64;
@@ -16,19 +17,21 @@ typedef signed int int32;
 class CoreResult
 {
 public:
+    bool used;
     uint64 tsc, cycles, ref_cycles, inst_retired;
     double ipc, core_usage, avg_freq, relative_freq;
     double l2hitratio, l3hitratio;
     uint64 l2hits, l2misses, l3hits, l3misses;
 
     CoreResult() :
+        used(false),
         tsc(0), cycles(0), ref_cycles(0), inst_retired(0),
         ipc(0), core_usage(0), avg_freq(0), relative_freq(0),
         l2hitratio(0.0), l3hitratio(0.0),
         l2hits(0), l2misses(0), l3hits(0), l3misses(0)
     {};
 
-    void print();
+    void print(std::ostream &  stream = std::cout);
 };
 
 class SocketResult
@@ -50,7 +53,7 @@ public:
         rlatency(0), wlatency(0)
     {};
 
-    void print();
+    void print(std::ostream & stream  = std::cout);
 };
 
 class PmState {
@@ -106,6 +109,9 @@ private:
     PmState * before_state;
     PmState * after_state;
 
+    std::map <std::string,double> external;
+    std::bitset <256> used_core_map;
+
 public:
     PmPerf();
     ~PmPerf();
@@ -114,6 +120,13 @@ public:
 
     void before();
     void after();
-    void diff();
+    void diff(std::ostream & stream = std::cout);
+    void export_diff(char * path);
+    void clear();
+    void used_core(int);
+    void add_external(const char *, double);
+    void add_external(const char *, uint64);
+
 };
+
 #endif
