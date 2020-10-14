@@ -82,6 +82,18 @@ void PmState::CollectState(pcm::PCM * m)
     m->getAllCounterStates(system_counter, socket_counter, core_counter);
 }
 
+
+void PmState::SetPMMCounter(FILE * fstream)
+{
+    while( !feof(fstream) && !ferror(fstream) )
+    {
+        char buf[128];
+        int bytesRead = fread( buf, 1, 128, fstream );
+        pmm_counter.write( buf, bytesRead );
+    }
+}
+
+
 double PmState::getRpqIns(pcm::PCM *m, PmState *before, PmState* after, int socket){
     double res = 0;
     for (size_t channel = 0; channel < m->getMCChannelsPerSocket(); ++channel)
@@ -225,6 +237,17 @@ PmPerf::PmPerf()
 
     before_state = new PmState;
     after_state = new PmState;
+
+    char * env = getenv("LD_PRELOAD");
+    if (env)
+    {
+        ld_preload_old.assign(env);
+    }
+    else
+    {
+        ld_preload_old.assign("");
+    }
+    
 }
 
 PmPerf::~PmPerf()
@@ -269,12 +292,24 @@ pcm::PCM::ErrorCode PmPerf::pmm_program()
 
 void PmPerf::before()
 {
+    setenv("LD_PRELOAD", "", 1);
+    FILE * ipmctl = popen ("ipmctl show -performance", "r");
+    before_state->SetPMMCounter(ipmctl);
+    pclose(ipmctl);
+    setenv("LD_PRELOAD", ld_preload_old.c_str(), 1);
+    
     before_state->CollectState(m);
 }
 
 void PmPerf::after()
 {
     after_state->CollectState(m);
+    
+    setenv("LD_PRELOAD", "", 1);
+    FILE * ipmctl = popen ("ipmctl show -performance", "r");
+    after_state->SetPMMCounter(ipmctl);
+    pclose(ipmctl);
+    setenv("LD_PRELOAD", ld_preload_old.c_str(), 1);
 }
 
 void PmPerf::clear()
@@ -301,6 +336,11 @@ void PmPerf::diff(std::ostream & os)
 {
     SocketResult * res_socket = new SocketResult[m->getNumSockets()];
     CoreResult * res_core = new CoreResult[m->getNumCores()];
+
+    os << ": Before PMM Conters" << std::endl;
+    os << before_state->pmm_counter.str() <<std::endl;
+    os << ": After PMM Conters" << std::endl;
+    os << after_state->pmm_counter.str() <<std::endl;
 
     for (uint32 i=0; i<m->getNumSockets(); i++)
     {

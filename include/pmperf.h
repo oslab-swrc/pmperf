@@ -57,18 +57,21 @@ public:
 };
 
 class PmState {
+    friend class PmPerf;
 private:
     pcm::ServerUncoreCounterState * uncore_counter;
     pcm::SystemCounterState system_counter;
     std::vector<pcm::CoreCounterState> core_counter;
     std::vector<pcm::SocketCounterState> socket_counter;
+    std::ostringstream pmm_counter;
 
 public:
     PmState();
     void CollectState(pcm::PCM *m);
-
+    void SetPMMCounter(std::FILE *);
     static void getSocketResult(pcm::PCM * m, SocketResult * res, PmState * before, PmState * after, int socket);
     static void getCoreResult(pcm::PCM * m, CoreResult * res, PmState * before, PmState * after, int core);
+
 private:
     static double getRpqIns(pcm::PCM *m, PmState *before, PmState* after, int socket);
     static double getRpqOcc(pcm::PCM *m, PmState *before, PmState* after, int socket);
@@ -111,6 +114,8 @@ private:
 
     std::map <std::string,double> external;
     std::bitset <256> used_core_map;
+
+    std::string ld_preload_old;
 
 public:
     PmPerf();
