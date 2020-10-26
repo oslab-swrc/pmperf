@@ -1,4 +1,5 @@
 *.o
 *.a
+*.pyc
 libs/
 pmperf_test

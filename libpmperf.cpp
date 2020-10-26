@@ -316,6 +316,10 @@ void PmPerf::clear()
 {
     used_core_map.reset();
     external.clear();
+    if (before_state)
+        before_state->clear();
+    if(after_state)
+        after_state->clear();
 }
 
 void PmPerf::used_core(int id)

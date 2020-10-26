@@ -72,6 +72,11 @@ public:
     static void getSocketResult(pcm::PCM * m, SocketResult * res, PmState * before, PmState * after, int socket);
     static void getCoreResult(pcm::PCM * m, CoreResult * res, PmState * before, PmState * after, int core);
 
+    void clear(void)
+    {
+        pmm_counter.clear();
+    }
+    
 private:
     static double getRpqIns(pcm::PCM *m, PmState *before, PmState* after, int socket);
     static double getRpqOcc(pcm::PCM *m, PmState *before, PmState* after, int socket);
