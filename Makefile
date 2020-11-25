@@ -11,21 +11,23 @@ INC_PATH += -Iinclude
 
 LIB_DIRS = -L$(PCM_PATH)
 LIB_DIRS += -Llibs
-LIB= -lpmperf -lPCM -pthread -lrt
+LIB= -lpmperf -lPCM -lpthread -lrt
 
-CXXFLAGS += -Wall -g -O3 -mmmx -msse2 -mavx512f -lpthread
+CXXFLAGS += -std=c++11 -Wall -g -O3 -mmmx -msse2 #-mavx512f 
 CXXFLAGS += $(INC_PATH)
 
-SUBDIRS = test
+SUBDIRS = test pmkiller
 SUBDIRSCLEAN=$(addsuffix clean,$(SUBDIRS))
 
 .SUFFIXES : .c .o
 
-.PHONY: all $(SUBDIRS)
+.PHONY: all subdirs $(SUBDIRS)
 all: $(SUBDIRS) $(INSTALL_PATH) 
 
 $(TARGET): $(OBJS) 
 	ar rcs $@ $^
+
+subdirs: $(SUBDIRS)
 
 $(SUBDIRS): libs/libpmperf.a
 	$(MAKE) -C $@
@@ -36,7 +38,7 @@ $(INSTALL_PATH): $(TARGET)
 	mkdir -p $(INSTALL_PATH)
 	cp -p $(TARGET) $(INSTALL_PATH)
 
-.PHONY: clean distclean $(SUBDIRSCLEAN)
+.PHONY: clean distclean subdirsclean $(SUBDIRSCLEAN)
 
 clean: $(SUBDIRSCLEAN)
 	for file in $(CLEANEXTS); do rm -f *.$$file; done
@@ -44,5 +46,5 @@ clean: $(SUBDIRSCLEAN)
 distclean: clean
 	rm -rf $(INSTALL_PATH)
 
-$(SUBDIRSCLEAN):
-		$(MAKE) -C $(SUBDIRS) clean
+%clean:
+	$(MAKE) -C $(SUBDIRS) clean

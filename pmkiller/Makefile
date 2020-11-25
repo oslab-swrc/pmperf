@@ -1,5 +1,5 @@
-TARGET = pmperf_test
-OBJS = pmperf_test.o
+TARGET = pmkiller
+OBJS = pmkiller.o
 CLEANEXTS = o 
 
 PCM_PATH_LOCAL = ../$(PCM_PATH)
@@ -8,7 +8,7 @@ INC_PATH += -I../include
 
 LIB_DIRS = -L$(PCM_PATH_LOCAL)
 LIB_DIRS += -L../libs
-LIB= -lpmperf -lPCM -lpthread -lrt 
+LIB= -lpmperf -lPCM -lpthread -lrt
 
 CXXFLAGS += -std=c++11 -Wall -g -O3 -mmmx -msse2 #-mavx512f
 CXXFLAGS += $(INC_PATH)
