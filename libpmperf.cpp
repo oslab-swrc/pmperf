@@ -63,17 +63,23 @@ void SocketResult::print(std::ostream & s)
 
 }
 
+void PMemResult::print(std::ostream & s)
+{    
+    s << media_read << "\t" << media_write << "\t";
+    s << read_requests << "\t" << write_requests << std::endl;
+}
 
 PmState::PmState()
-{
-    pcm::PCM * m = pcm::PCM::getInstance();
-
-    uncore_counter = new pcm::ServerUncoreCounterState[m->getNumSockets()];
-
-}
+:	pmem_count(PMEM_NUM_MODULE)
+{}
 
 void PmState::CollectState(pcm::PCM * m)
 {
+    if (m->getNumSockets() != SERV_NUM_SOCKET)
+    {
+        std::cerr << "Recompile with correct PMEM_NUM_MODULE." << std::endl;
+        exit(EXIT_FAILURE);        
+    }
     for (unsigned int i=0; i<m->getNumSockets(); i++)
     {
         uncore_counter[i] = m->getServerUncoreCounterState(i);
@@ -83,14 +89,18 @@ void PmState::CollectState(pcm::PCM * m)
 }
 
 
-void PmState::SetPMMCounter(FILE * fstream)
+void PmState::CollectPmemCounter(struct device_discovery* devices, const unsigned int count)
 {
-    while( !feof(fstream) && !ferror(fstream) )
-    {
-        char buf[128];
-        int bytesRead = fread( buf, 1, 128, fstream );
-        pmm_counter.write( buf, bytesRead );
+    unsigned int idx;
+    if (pmem_count != count) {
+        std::cerr << "Recompile with correct PMEM_NUM_MODULE." << std::endl;
+        exit(EXIT_FAILURE);
     }
+    
+    for(idx=0; idx < count; idx++){
+        nvm_get_device_performance(devices[idx].uid, &pmem_counters[idx]);
+    }
+    
 }
 
 
@@ -195,7 +205,13 @@ void PmState::getSocketResult(pcm::PCM * m, SocketResult * res, PmState * before
         res->wlatency = res->woccupancy / res->winsert;
 }
 
-
+void PmState::getPMemResult(PMemResult * res, PmState * before, PmState *after, int idx)
+{
+    res->media_read = after->pmem_counters[idx].bytes_read - before->pmem_counters[idx].bytes_read;
+    res->media_write = after->pmem_counters[idx].bytes_written - before->pmem_counters[idx].bytes_written;
+    res->read_requests = after->pmem_counters[idx].host_reads - before->pmem_counters[idx].host_reads;
+    res->write_requests = after->pmem_counters[idx].host_writes - before->pmem_counters[idx].host_writes;
+}
 
 std::map<PmPerf::Event, uint32> PmPerf::event_codes = {
         { UNC_M_CLOCKTICKS,             MC_CH_PCI_PMON_CTL_EVENT(0x00)},
@@ -221,10 +237,12 @@ std::map<PmPerf::Event, uint32> PmPerf::event_codes = {
 
 PmPerf::PmPerf()
 {
+    int nvm_return = 0;
+
     m = pcm::PCM::getInstance();
     if(m->getNumSockets() > max_sockets)
     {
-        std::cerr << "Only systems with up to "<<max_sockets<<" sockets are supported! Program aborted" << std::endl;
+        std::cerr << "Only systems with up to " << max_sockets << " sockets are supported! Program aborted" << std::endl;
         exit(EXIT_FAILURE);
     }
 	if (m->getNumCores() != m->getNumOnlineCores())
@@ -235,19 +253,12 @@ PmPerf::PmPerf()
 
     m->resetPMU();
 
-    before_state = new PmState;
-    after_state = new PmState;
-
-    char * env = getenv("LD_PRELOAD");
-    if (env)
+    if (NVM_SUCCESS != (nvm_return = nvm_get_host( &host_info)))
     {
-        ld_preload_old.assign(env);
+        std::cerr << "nvm_get_host failed, error code(" << nvm_return << ").\n";
+        exit(EXIT_FAILURE);
     }
-    else
-    {
-        ld_preload_old.assign("");
-    }
-    
+    init_pmem_devices();
 }
 
 PmPerf::~PmPerf()
@@ -292,34 +303,22 @@ pcm::PCM::ErrorCode PmPerf::pmm_program()
 
 void PmPerf::before()
 {
-    setenv("LD_PRELOAD", "", 1);
-    FILE * ipmctl = popen ("ipmctl show -performance", "r");
-    before_state->SetPMMCounter(ipmctl);
-    pclose(ipmctl);
-    setenv("LD_PRELOAD", ld_preload_old.c_str(), 1);
-    
-    before_state->CollectState(m);
+    before_state.CollectPmemCounter(pmem_devices, pmem_count);   
+    before_state.CollectState(m);
 }
 
 void PmPerf::after()
 {
-    after_state->CollectState(m);
-    
-    setenv("LD_PRELOAD", "", 1);
-    FILE * ipmctl = popen ("ipmctl show -performance", "r");
-    after_state->SetPMMCounter(ipmctl);
-    pclose(ipmctl);
-    setenv("LD_PRELOAD", ld_preload_old.c_str(), 1);
+    after_state.CollectState(m);
+    after_state.CollectPmemCounter(pmem_devices, pmem_count);   
 }
 
 void PmPerf::clear()
 {
     used_core_map.reset();
     external.clear();
-    if (before_state)
-        before_state->clear();
-    if(after_state)
-        after_state->clear();
+    before_state.clear();
+    after_state.clear();
 }
 
 void PmPerf::used_core(int id)
@@ -338,18 +337,20 @@ void PmPerf::add_external(const char *k , uint64 v)
 
 void PmPerf::diff(std::ostream & os)
 {
-    SocketResult * res_socket = new SocketResult[m->getNumSockets()];
-    CoreResult * res_core = new CoreResult[m->getNumCores()];
+    SocketResult res_socket [SERV_NUM_SOCKET];
+    CoreResult res_core [SERV_NUM_CORE];
+	PMemResult res_pmem [PMEM_NUM_MODULE];
 
-    os << ": Before PMM Conters" << std::endl;
-    os << before_state->pmm_counter.str() <<std::endl;
-    os << ": After PMM Conters" << std::endl;
-    os << after_state->pmm_counter.str() <<std::endl;
+    for(uint32 i=0 ; i < pmem_count; i++)
+    {
+        PMemResult * p = &res_pmem[i];
+        PmState::getPMemResult(p, &before_state, &after_state, i);
+    }
 
     for (uint32 i=0; i<m->getNumSockets(); i++)
     {
         SocketResult * s = &res_socket[i];
-        PmState::getSocketResult(m, s, before_state, after_state, i);
+        PmState::getSocketResult(m, s, &before_state, &after_state, i);
     }
 
     for (uint32 j=0; j<m->getNumCores(); j++)
@@ -357,9 +358,25 @@ void PmPerf::diff(std::ostream & os)
         CoreResult * c = &res_core[j];
         if (used_core_map.test(j))
             c->used = true;
-        PmState::getCoreResult(m, c, before_state, after_state, j);
+        PmState::getCoreResult(m, c, &before_state, &after_state, j);
     }
 
+    // export pmem result
+    os << ":\tPMem module information" << std::endl;
+    os << "#\tidx\tsocket\tcontroller\tchannel\tMediaReads\tMediaWrites\tReadRequests\tWriteRequests" << std::endl;
+    for (uint32 i = 0 ; i < pmem_count ; i++) {
+        
+		PMemResult * p = &res_pmem[i];
+        os << "\t" << i << "\t" 
+            << pmem_devices[i].socket_id << "\t" 
+            << pmem_devices[i].memory_controller_id << "\t" 
+            << pmem_devices[i].channel_id << "\t";
+        p->print(os);
+    }
+	os << std::endl;
+
+
+	// export core, uncore result
     for (uint32 i=0; i<m->getNumSockets(); i++)
     {
         SocketResult * s = &res_socket[i];
@@ -378,14 +395,21 @@ void PmPerf::diff(std::ostream & os)
         }
     }
 
-    delete res_socket;
-    
     return;
 }
 
-void PmPerf::export_diff(char * path) {
+void PmPerf::export_diff(const char * path) {
+    
+	std::ofstream outFile(path);
 
-    std::ofstream outFile(path);
+    // export host information
+    outFile << ": Host Information \n";
+    outFile << "name: " << host_info.name << std::endl;
+    outFile << "os_name: " << host_info.os_name << std::endl;
+    outFile << "os_version: " << host_info.os_version << std:: endl;
+    outFile << "os_type: " << host_info.os_type << std:: endl;
+    outFile << "mixed_sku: " << (host_info.mixed_sku ? "true" : "false") << std:: endl;
+    outFile << "sku_violation: " << (host_info.sku_violation ? "true" : "false") << std:: endl << std::endl;
 
     for ( auto & kv : external)
     {
@@ -398,4 +422,27 @@ void PmPerf::export_diff(char * path) {
     
     return;
 
+}
+
+int PmPerf::init_pmem_devices() {
+    int nvm_return = 0;
+
+    if (NVM_SUCCESS != (nvm_return = nvm_get_number_of_devices(&pmem_count)))
+    {
+        std::cerr << "nvm_get_number_of_devices failed: " << nvm_return << std::endl;
+        return -1;
+    }
+
+    if (pmem_count != PMEM_NUM_MODULE)
+    {
+        std::cerr << "Recompile with correct PMEM_NUM_MODULE." << std::endl;
+        exit(EXIT_FAILURE);
+    }
+    
+    if (NVM_SUCCESS != (nvm_return = nvm_get_devices(pmem_devices, pmem_count))){
+        std::cerr << "nvm_get_devices failed: " << nvm_return << std::endl;
+        return -1;
+    }
+	
+	return 0;
 }

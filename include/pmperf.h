@@ -2,7 +2,8 @@
 #define PMPERF_H 1
 
 #include <bitset>
-#include "cpucounters.h"
+#include <cpucounters.h>
+#include <nvm_management.h>
 
 typedef unsigned long long uint64;
 typedef signed long long int64;
@@ -13,6 +14,12 @@ typedef signed int int32;
 #define RPQ_INS 1
 #define WPQ_OCC 2
 #define WPQ_INS 3
+
+
+#define PMEM_NUM_MODULE 12
+#define SERV_NUM_SOCKET 2
+#define SERV_NUM_CORE 112
+
 
 class CoreResult
 {
@@ -55,26 +62,41 @@ public:
 
     void print(std::ostream & stream  = std::cout);
 };
+class PMemResult
+{
+public:
+    uint64 media_read;
+    uint64 media_write;
+    uint64 read_requests;
+    uint64 write_requests;
+
+    PMemResult() :
+        media_read(0), media_write(0), read_requests(0), write_requests(0)
+    {};
+
+    void print(std::ostream & stream = std::cout);
+};
 
 class PmState {
     friend class PmPerf;
 private:
-    pcm::ServerUncoreCounterState * uncore_counter;
+    pcm::ServerUncoreCounterState uncore_counter[SERV_NUM_SOCKET];
     pcm::SystemCounterState system_counter;
     std::vector<pcm::CoreCounterState> core_counter;
     std::vector<pcm::SocketCounterState> socket_counter;
-    std::ostringstream pmm_counter;
+    struct device_performance pmem_counters[PMEM_NUM_MODULE];
+    unsigned int pmem_count;
 
 public:
     PmState();
     void CollectState(pcm::PCM *m);
-    void SetPMMCounter(std::FILE *);
+    void CollectPmemCounter(struct device_discovery* devices, unsigned int count);
     static void getSocketResult(pcm::PCM * m, SocketResult * res, PmState * before, PmState * after, int socket);
     static void getCoreResult(pcm::PCM * m, CoreResult * res, PmState * before, PmState * after, int core);
+    static void getPMemResult(PMemResult * res, PmState * before, PmState *after, int idx);
 
     void clear(void)
     {
-        pmm_counter.clear();
     }
     
 private:
@@ -112,15 +134,16 @@ class PmPerf {
 
 private:
     pcm::PCM * m;
+	struct host host_info;
+    unsigned int pmem_count;
+    struct device_discovery pmem_devices [PMEM_NUM_MODULE];
     static std::map <Event,uint32> event_codes;
 
-    PmState * before_state;
-    PmState * after_state;
+    PmState before_state;
+    PmState after_state;
 
     std::map <std::string,double> external;
     std::bitset <256> used_core_map;
-
-    std::string ld_preload_old;
 
 public:
     PmPerf();
@@ -131,11 +154,13 @@ public:
     void before();
     void after();
     void diff(std::ostream & stream = std::cout);
-    void export_diff(char * path);
+    void export_diff(const char * path);
     void clear();
     void used_core(int);
     void add_external(const char *, double);
     void add_external(const char *, uint64);
+
+    int init_pmem_devices();
 
 };
 

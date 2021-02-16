@@ -1,6 +1,8 @@
 *.o
 *.a
 *.pyc
+*.pmperf
+tags
 libs/
 pmperf_test
 pmkiller

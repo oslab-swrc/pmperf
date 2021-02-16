@@ -1,5 +1,5 @@
-TARGET = libpmperf.a
 INSTALL_PATH = libs
+TARGET = $(INSTALL_PATH)/libpmperf.a
 OBJS = libpmperf.o
 
 CLEANEXTS = o a
@@ -10,41 +10,37 @@ INC_PATH = -I$(PCM_PATH)
 INC_PATH += -Iinclude
 
 LIB_DIRS = -L$(PCM_PATH)
-LIB_DIRS += -Llibs
-LIB= -lpmperf -lPCM -lpthread -lrt
+LIB_DIRS += -L$(INSTALL_PATH)
+LIB= -lpmperf -lPCM -lpthread -lrt -lipmctl
 
 CXXFLAGS += -std=c++11 -Wall -g -O3 -mmmx -msse2 #-mavx512f 
 CXXFLAGS += $(INC_PATH)
 
-SUBDIRS = test pmkiller
-SUBDIRSCLEAN=$(addsuffix clean,$(SUBDIRS))
+SUBDIRS = $(filter-out include/ $(INSTALL_PATH)/ , $(wildcard */))
 
 .SUFFIXES : .c .o
 
 .PHONY: all subdirs $(SUBDIRS)
-all: $(SUBDIRS) $(INSTALL_PATH) 
 
-$(TARGET): $(OBJS) 
-	ar rcs $@ $^
+all: subdirs $(INSTALL_PATH) 
+
+$(TARGET): $(OBJS) $(INSTALL_PATH)
+	ar rcs $@ $(OBJS)
 
 subdirs: $(SUBDIRS)
 
-$(SUBDIRS): libs/libpmperf.a
+$(SUBDIRS): $(TARGET)
 	$(MAKE) -C $@
 
-$(INSTALL_PATH)/libpmperf.a: $(INSTALL_PATH)
 
-$(INSTALL_PATH): $(TARGET)
+$(INSTALL_PATH):
 	mkdir -p $(INSTALL_PATH)
-	cp -p $(TARGET) $(INSTALL_PATH)
 
-.PHONY: clean distclean subdirsclean $(SUBDIRSCLEAN)
+.PHONY: clean distclean
 
-clean: $(SUBDIRSCLEAN)
+clean:
+	for subdir in $(SUBDIRS); do $(MAKE) -C $$subdir clean; done
 	for file in $(CLEANEXTS); do rm -f *.$$file; done
 
-distclean: clean
+distclean: clean	
 	rm -rf $(INSTALL_PATH)
-
-%clean:
-	$(MAKE) -C $(SUBDIRS) clean
