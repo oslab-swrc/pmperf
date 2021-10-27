@@ -2,6 +2,13 @@
 
 Pmperf is a c++ library that provides functionalities of reading the performance counter and exporting results to files for persistent memory(PMem) programs.
 
+### Directory structure
+pmperf
+├── include              # public headers of pmperf 
+├── pmperf               # source code of pmperf library 
+├── test                 # simple test program using pmperf 
+├── pmkiller             # experimental program used for persistent memory endurance measurement
+
 ### Dependencies
 Pmperf uses Intel's PCM (https://github.com/opcm/pcm) library and libipmctl.
 We had tested this library with an Intel Optane PMM installed Ubuntu server.
@@ -67,5 +74,5 @@ To run programs using the PCM library, you need root permission and the *msr* ke
 <pre>
 	# modprobe msr
 </pre>
-Run *pmperf_test*.
+Run *pmperf_test*. When pmperf_test terminates, you can find the *test.pmperf* in the location where it was run. This file contains all data written by pmperf.
 

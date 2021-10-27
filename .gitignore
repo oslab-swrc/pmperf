@@ -4,5 +4,5 @@
 *.pmperf
 tags
 libs/
-pmperf_test
-pmkiller
+test/pmperf_test
+pmkiller/pmkiller
