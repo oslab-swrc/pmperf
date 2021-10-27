@@ -1,46 +1,32 @@
-INSTALL_PATH = libs
-TARGET = $(INSTALL_PATH)/libpmperf.a
-OBJS = libpmperf.o
+PWD = $(shell pwd)
+PCM_PATH = $(PWD)/../pcm
+INSTALL_PATH = $(PWD)/libs
+export PCM_PATH
+export INSTALL_PATH
+
+PMPERF_SRC = pmperf
+LIB_TARGET = $(INSTALL_PATH)/libpmperf.a
+
+APPS = test pmkiller
 
 CLEANEXTS = o a
 
-PCM_PATH = ../pcm
-export PCM_PATH
-INC_PATH = -I$(PCM_PATH)
-INC_PATH += -Iinclude
+.PHONY: all $(LIBSRC) $(APPS)
 
-LIB_DIRS = -L$(PCM_PATH)
-LIB_DIRS += -L$(INSTALL_PATH)
-LIB= -lpmperf -lPCM -lpthread -lrt -lipmctl
+all: $(PMPERF_SRC) $(APPS)
 
-CXXFLAGS += -std=c++11 -Wall -g -O3 -mmmx -msse2 #-mavx512f 
-CXXFLAGS += $(INC_PATH)
+$(LIB_TARGET): 
+	$(MAKE) -C $(PMPERF_SRC)
 
-SUBDIRS = $(filter-out include/ $(INSTALL_PATH)/ , $(wildcard */))
-
-.SUFFIXES : .c .o
-
-.PHONY: all subdirs $(SUBDIRS)
-
-all: subdirs $(INSTALL_PATH) 
-
-$(TARGET): $(OBJS) $(INSTALL_PATH)
-	ar rcs $@ $(OBJS)
-
-subdirs: $(SUBDIRS)
-
-$(SUBDIRS): $(TARGET)
+$(APPS): $(LIB_TARGET)
 	$(MAKE) -C $@
 
-
-$(INSTALL_PATH):
-	mkdir -p $(INSTALL_PATH)
 
 .PHONY: clean distclean
 
 clean:
-	for subdir in $(SUBDIRS); do $(MAKE) -C $$subdir clean; done
+	for subdir in $(APPS); do $(MAKE) -C $$subdir clean; done
 	for file in $(CLEANEXTS); do rm -f *.$$file; done
 
-distclean: clean	
+distclean: clean
 	rm -rf $(INSTALL_PATH)

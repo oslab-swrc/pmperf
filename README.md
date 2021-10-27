@@ -1,4 +1,4 @@
-## Pmperf: Performance Monitoring Library for Persistent Memory Programms
+## Pmperf: Performance Monitoring Library for Persistent Memory Programs
 
 Pmperf is a c++ library that provides functionalities of reading the performance counter and exporting results to files for persistent memory(PMem) programs.
 
@@ -21,26 +21,28 @@ To build ipmctl, we need libndctl. We had tested with v71.1.
  $ sudo ldconfig
 </pre>
 
-If you want to check if ndctl is installed correctly, use the command below. If y is displayed, the installation was successful.
+If you want to check if ndctl is installed correctly, use the command below. If SUCCESS is displayed, the installation was successful.
 <pre>
- $ pkg-config "libndctl >= 63" && echo y || echo n
- $ pkg-config "libdaxctl >= 63" && echo y || echo n
+ $ pkg-config "libndctl >= 63" && echo SUCCESS || echo FAIL
+ $ pkg-config "libdaxctl >= 63" && echo SUCCESS || echo FAIL
 </pre>
 
+Now, install ipmctl.
 <pre>
  $ git clone https://github.com/intel/ipmctl.git
  $ cd ipmctl
- $ git checkout tags/v02.00.00.3833
+ $ git checkout tags/v03.00.00.0395
  $ mkdir output && cd output
  $ cmake -DRELEASE=ON -DCMAKE_INSTALL_PREFIX=/usr ..
  $ make -j all
  $ sudo make install
- $ pkg-config "libipmctl" && echo y || echo n
+ $ pkg-config "libipmctl" && echo SUCCESS || echo FAIL
 </pre>
-If y is displayed after last command, the installation was successful.
+If SUCCESS is displayed after last command, the installation was successful.
 
 
 #### Install [PCM](https://github.com/opcm/pcm)
+Clone the PCM repository to the same location where you cloned pmperf. Then, you can build without modifying pmperf.
 <pre>
  $ git clone https://github.com/opcm/pcm
  $ cd pcm
@@ -48,13 +50,12 @@ If y is displayed after last command, the installation was successful.
  $ make -j
 </pre>
 
-You can add `CXXFLAGS += -DPCM_SILENT` to Makefile to reduce the number of messages produced by PCM.
  
 ### Building Pmperf Library
 <pre>
  $ git clone https://github.com/oslab-swrc/pmperf.git
  $ cd pmperf
-</pre>
+</pre>s
 Open `Makefile` and change the PCM_PATH variable to the location of the PCM library you installed.
 <pre>
  $ make
@@ -68,12 +69,3 @@ To run programs using the PCM library, you need root permission and the *msr* ke
 </pre>
 Run *pmperf_test*.
 
-## License
-Pmperf is under the MIT license (https://opensource.org/licenses/MIT).
-Copyright for Pmperf is held by the ETRI.
-
-## Acknowledgements
-
-
-## Contact
-Please contact us at `youngjoo@etri.re.kr` with any questions.

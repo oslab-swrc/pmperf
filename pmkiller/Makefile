@@ -2,11 +2,10 @@ TARGET = pmkiller
 OBJS = pmkiller.o
 CLEANEXTS = o 
 
-PCM_PATH_LOCAL = ../$(PCM_PATH)
-INC_PATH = -I$(PCM_PATH_LOCAL)
+INC_PATH = -I$(PCM_PATH)
 INC_PATH += -I../include
 
-LIB_DIRS = -L$(PCM_PATH_LOCAL)
+LIB_DIRS = -L$(PCM_PATH)
 LIB_DIRS += -L../libs
 LIB= -lpmperf -lPCM -lpthread -lrt -lipmctl
 

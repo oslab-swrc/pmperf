@@ -1,3 +1,8 @@
+## SPDX-FileCopyrightText: Copyright (c) 2021 Electronics and Telecommunications Research Institute
+## SPDX-License-Identifier: MIT
+## 
+## Author : Youngjoo Woo <my.cat.liang@gmail.com>
+
 import sys
 import os
 
@@ -21,6 +26,16 @@ class Summary:
             self.build()
         else:
             self.sockets = {}
+            self.envs = {}
+
+    def add_envs(self, key, value):
+        self.envs[key] = value
+        return
+
+    def copy_envs(self, other):
+        for (key, val) in other.envs.items():
+            self.envs[key] = val
+        return
 
     def build(self):
         with open(self.filepath , 'r') as f:
