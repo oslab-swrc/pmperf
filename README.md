@@ -3,11 +3,13 @@
 Pmperf is a c++ library that provides functionalities of reading the performance counter and exporting results to files for persistent memory(PMem) programs.
 
 ### Directory structure
+<pre>
 pmperf
 ├── include              # public headers of pmperf 
 ├── pmperf               # source code of pmperf library 
 ├── test                 # simple test program using pmperf 
-├── pmkiller             # experimental program used for persistent memory endurance measurement
+└── pmkiller             # experimental program used for persistent memory endurance measurement
+</pre>
 
 ### Dependencies
 Pmperf uses Intel's PCM (https://github.com/opcm/pcm) library and libipmctl.
@@ -53,7 +55,7 @@ Clone the PCM repository to the same location where you cloned pmperf. Then, you
 <pre>
  $ git clone https://github.com/opcm/pcm
  $ cd pcm
- & git checkout tags/202011
+ & git checkout tags/202110
  $ make -j
 </pre>
 
@@ -62,8 +64,8 @@ Clone the PCM repository to the same location where you cloned pmperf. Then, you
 <pre>
  $ git clone https://github.com/oslab-swrc/pmperf.git
  $ cd pmperf
-</pre>s
-Open `Makefile` and change the PCM_PATH variable to the location of the PCM library you installed.
+</pre>
+Open `Makefile` and make sure the PCM_PATH variable matches the location of the PCM repository you have installed.
 <pre>
  $ make
 </pre>
